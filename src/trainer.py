@@ -5,12 +5,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from os.path import isfile
-
-from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras.optimizers import Adam
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.optimizers import Adam
 
 from sklearn.metrics import confusion_matrix, classification_report
-
 
 def train_model(nb_classes=20,
                 slice_length=911,
@@ -33,7 +31,9 @@ def train_model(nb_classes=20,
     """
 
     weights = os.path.join(save_weights_folder, str(nb_classes) +
-                           '_' + str(slice_length) + '_' + str(random_states))
+                           '_' + str(slice_length) + '_' + str(random_states)
+                            + '.keras'
+                            )
     os.makedirs(save_weights_folder, exist_ok=True)
     os.makedirs(save_metrics_folder, exist_ok=True)
 
@@ -80,7 +80,7 @@ def train_model(nb_classes=20,
     # build the model
     model = models.CRNN2D(X_train.shape, nb_classes=Y_train.shape[1])
     model.compile(loss='categorical_crossentropy',
-                  optimizer=Adam(lr=lr),
+                  optimizer=Adam(learning_rate=lr),
                   metrics=['accuracy'])
     model.summary()
 

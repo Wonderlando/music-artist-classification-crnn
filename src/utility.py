@@ -25,11 +25,11 @@ def visualize_spectrogram(path, duration=None,
 
     # Make a mel-scaled power (energy-squared) spectrogram
     y, sr = librosa.load(path, sr=sr, duration=duration, offset=offset)
-    S = librosa.feature.melspectrogram(y, sr=sr, n_mels=n_mels, n_fft=n_fft,
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels, n_fft=n_fft,
                                        hop_length=hop_length)
 
     # Convert to log scale (dB)
-    log_S = librosa.logamplitude(S, ref_power=1.0)
+    log_S = librosa.power_to_db(S, ref=1.0)
 
     # Render output spectrogram in the console
     plt.figure(figsize=(12, 5))
@@ -39,7 +39,7 @@ def visualize_spectrogram(path, duration=None,
     plt.tight_layout()
 
 
-def create_dataset(artist_folder='artists', save_folder='song_data',
+def create_dataset(artist_folder='./artists', save_folder='song_data',
                    sr=16000, n_mels=128,
                    n_fft=2048, hop_length=512):
     """This function creates the dataset given a folder
@@ -49,37 +49,43 @@ def create_dataset(artist_folder='artists', save_folder='song_data',
     # get list of all artists
     os.makedirs(save_folder, exist_ok=True)
     artists = [path for path in os.listdir(artist_folder) if
-               os.path.isdir(path)]
+               os.path.isdir(os.path.join(artist_folder, path))]
 
     # iterate through all artists, albums, songs and find mel spectrogram
     for artist in artists:
         print(artist)
         artist_path = os.path.join(artist_folder, artist)
-        artist_albums = os.listdir(artist_path)
+        artist_albums = [album for album in os.listdir(artist_path)
+                         if os.path.isdir(os.path.join(artist_path, album))]
 
         for album in artist_albums:
             album_path = os.path.join(artist_path, album)
-            album_songs = os.listdir(album_path)
+            album_songs = [song for song in os.listdir(album_path)
+                           if os.path.isfile(os.path.join(album_path, song))]
 
             for song in album_songs:
                 song_path = os.path.join(album_path, song)
 
-                # Create mel spectrogram and convert it to the log scale
-                y, sr = librosa.load(song_path, sr=sr)
-                S = librosa.feature.melspectrogram(y, sr=sr, n_mels=n_mels,
-                                                   n_fft=n_fft,
-                                                   hop_length=hop_length)
-                log_S = librosa.logamplitude(S, ref_power=1.0)
-                data = (artist, log_S, song)
+                try:
+                    # Create mel spectrogram and convert it to the log scale
+                    y, sr = librosa.load(song_path, sr=sr)
+                    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels,
+                                                       n_fft=n_fft,
+                                                       hop_length=hop_length)
+                    log_S = librosa.power_to_db(S, ref=1.0)
+                    data = (artist, log_S, song)
 
-                # Save each song
-                save_name = artist + '_%%-%%_' + album + '_%%-%%_' + song
-                with open(os.path.join(save_folder, save_name), 'wb') as fp:
-                    dill.dump(data, fp)
+                    # Save each song
+                    save_name = artist + '_%%-%%_' + album + '_%%-%%_' + song
+                    with open(os.path.join(save_folder, save_name), 'wb') as fp:
+                        dill.dump(data, fp)
+                except Exception as e:
+                    print(f"Error processing {song_path}: {e}")
+
 
 
 def load_dataset(song_folder_name='song_data',
-                 artist_folder='artists',
+                 artist_folder='./artists',
                  nb_classes=20, random_state=42):
     """This function loads the dataset based on a location;
      it returns a list of spectrograms
@@ -113,7 +119,7 @@ def load_dataset(song_folder_name='song_data',
 
 
 def load_dataset_album_split(song_folder_name='song_data',
-                             artist_folder='artists',
+                             artist_folder='./artists',
                              nb_classes=20, random_state=42):
     """ This function loads a dataset and splits it on an album level"""
     song_list = os.listdir(song_folder_name)
@@ -168,7 +174,7 @@ def load_dataset_album_split(song_folder_name='song_data',
 
 
 def load_dataset_song_split(song_folder_name='song_data',
-                            artist_folder='artists',
+                            artist_folder='./artists',
                             nb_classes=20,
                             test_split_size=0.1,
                             validation_split_size=0.1,
@@ -211,13 +217,14 @@ def slice_songs(X, Y, S, length=911):
     return np.array(spectrogram), np.array(artist), np.array(song_name)
 
 
-def create_spectrogram_plots(artist_folder='artists', sr=16000, n_mels=128,
+def create_spectrogram_plots(artist_folder='./artists', sr=16000, n_mels=128,
                              n_fft=2048, hop_length=512):
     """Create a spectrogram from a randomly selected song
      for each artist and plot"""
 
     # get list of all artists
-    artists = os.listdir(artist_folder)
+    artists = [path for path in os.listdir(artist_folder) if
+               os.path.isdir(os.path.join(artist_folder, path))]
 
     fig, ax = plt.subplots(nrows=4, ncols=5, figsize=(14, 12), sharex=True,
                            sharey=True)
@@ -228,32 +235,34 @@ def create_spectrogram_plots(artist_folder='artists', sr=16000, n_mels=128,
     # iterate through artists, randomly select an album,
     # randomly select a song, and plot a spectrogram on a grid
     for artist in artists:
-        print(artist)
         # Randomly select album and song
         artist_path = os.path.join(artist_folder, artist)
-        artist_albums = os.listdir(artist_path)
+        artist_albums = [path for path in os.listdir(artist_path) if
+                        os.path.isdir(os.path.join(artist_path, path))]
         album = random.choice(artist_albums)
         album_path = os.path.join(artist_path, album)
         album_songs = os.listdir(album_path)
         song = random.choice(album_songs)
+        print(song)
         song_path = os.path.join(album_path, song)
 
         # Create mel spectrogram
         y, sr = librosa.load(song_path, sr=sr, offset=60, duration=3)
-        S = librosa.feature.melspectrogram(y, sr=sr, n_mels=n_mels,
+        S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels,
                                            n_fft=n_fft, hop_length=hop_length)
-        log_S = librosa.logamplitude(S, ref_power=1.0)
+        log_S = librosa.power_to_db(S, ref=1.0)
 
         # Plot on grid
         plt.axes(ax[row, col])
         librosa.display.specshow(log_S, sr=sr)
-        plt.title(artist)
+        plt.title(artist + ' , ' + song)
         col += 1
         if col == 5:
             row += 1
             col = 0
 
     fig.tight_layout()
+    plt.show()
 
 
 def plot_confusion_matrix(cm, classes,
@@ -328,7 +337,6 @@ def predict_artist(model, X, Y, S,
         if slices and slices <= X_song.shape[0]:
             X_song, Y_song = shuffle(X_song, Y_song)
             X_song = X_song[:slices]
-            Y_song = Y_song[:slices]
 
         # Get probabilities of each class
         predictions = model.predict(X_song, verbose=0)
@@ -358,8 +366,8 @@ def predict_artist(model, X, Y, S,
         # Print out prediction
         if verbose:
             print(song)
-            print("Predicted:", le.inverse_transform(prediction), "\nActual:",
-                  le.inverse_transform(actual))
+            print("Predicted:", le.inverse_transform([prediction])[0], "\nActual:",
+                  le.inverse_transform([actual])[0])
             print('\n')
 
     # Print overall song accuracy
@@ -423,8 +431,8 @@ def simple_encoding(Y, le=None):
 if __name__ == '__main__':
 
     # configuration options
-    create_data = True
-    create_visuals = False
+    create_data = False
+    create_visuals = True
     save_visuals = False
 
     if create_data:
