@@ -2,6 +2,7 @@ import os
 import dill
 import random
 import itertools
+import logging
 
 import numpy as np
 from numpy.random import RandomState
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 
 import librosa
 import librosa.display
+from pydub import AudioSegment
 
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
@@ -37,6 +39,7 @@ def visualize_spectrogram(path, duration=None,
     plt.title('mel power spectrogram')
     plt.colorbar(format='%+02.0f dB')
     plt.tight_layout()
+    plt.show()
 
 
 def create_dataset(artist_folder='./artists', save_folder='song_data',
@@ -45,6 +48,8 @@ def create_dataset(artist_folder='./artists', save_folder='song_data',
     """This function creates the dataset given a folder
      with the correct structure (artist_folder/artists/albums/*.mp3)
     and saves it to a specified folder."""
+
+    logging.basicConfig(filename = 'error.log', level = logging.ERROR)
 
     # get list of all artists
     os.makedirs(save_folder, exist_ok=True)
@@ -69,6 +74,18 @@ def create_dataset(artist_folder='./artists', save_folder='song_data',
                 try:
                     # Create mel spectrogram and convert it to the log scale
                     y, sr = librosa.load(song_path, sr=sr)
+                except Exception as e:
+                    logging.error(f"Librosa error processing {song_path}: {e}")
+                    # Fallback: Use pydub to decode the MP3 file
+                    try:
+                        audio = AudioSegment.from_file(song_path)
+                        y = np.array(audio.get_array_of_samples())
+                        sr = audio.frame_rate
+                    except Exception as e:
+                        logging.error(f"Pydub error processing {song_path}: {e}")
+                        continue
+
+                try:
                     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels,
                                                        n_fft=n_fft,
                                                        hop_length=hop_length)
@@ -85,17 +102,20 @@ def create_dataset(artist_folder='./artists', save_folder='song_data',
 
 
 def load_dataset(song_folder_name='song_data',
-                 artist_folder='./artists',
+                 artist_folder='artists',
                  nb_classes=20, random_state=42):
     """This function loads the dataset based on a location;
      it returns a list of spectrograms
      and their corresponding artists/song names"""
 
     # Get all songs saved as numpy arrays in the given folder
-    song_list = os.listdir(song_folder_name)
+    song_list_path = os.path.join(os.getcwd(), song_folder_name)
+    print(song_list_path)
+    song_list = os.listdir(song_list_path)
 
     # Load the list of artists
-    artist_list = os.listdir(artist_folder)
+    artist_list_path = os.path.join(os.getcwd(), artist_folder)
+    artist_list = os.listdir(artist_list_path)
 
     # select the appropriate number of classes
     prng = RandomState(random_state)
@@ -268,7 +288,7 @@ def create_spectrogram_plots(artist_folder='./artists', sr=16000, n_mels=128,
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
                           title='Confusion matrix',
-                          cmap=plt.cm.get_cmap('Blues')):
+                          cmap=plt.get_cmap('Blues')):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -431,7 +451,7 @@ def simple_encoding(Y, le=None):
 if __name__ == '__main__':
 
     # configuration options
-    create_data = False
+    create_data = True
     create_visuals = True
     save_visuals = False
 
@@ -443,8 +463,8 @@ if __name__ == '__main__':
     if create_visuals:
         # Create spectrogram for a specific song
         visualize_spectrogram(
-            'artists/u2/The_Joshua_Tree/' +
-            '02-I_Still_Haven_t_Found_What_I_m_Looking_For.mp3',
+            'artists/metro_boomin/heroes_&_villians/' +
+            '0.wav',
             offset=60, duration=29.12)
 
         # Create spectrogram subplots

@@ -12,8 +12,8 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 def train_model(nb_classes=20,
                 slice_length=911,
-                artist_folder='artists',
-                song_folder='song_data',
+                artist_folder='src/artists',
+                song_folder='src/song_data',
                 plots=True,
                 train=True,
                 load_checkpoint=False,
@@ -21,9 +21,9 @@ def train_model(nb_classes=20,
                 save_metrics_folder='metrics',
                 save_weights_folder='weights',
                 batch_size=16,
-                nb_epochs=200,
+                nb_epochs=1, # change later
                 early_stop=10,
-                lr=0.0001,
+                lr=0.001,
                 album_split=True,
                 random_states=42):
     """
@@ -119,7 +119,7 @@ def train_model(nb_classes=20,
 
     # Score test model
     score = model.evaluate(X_test, Y_test, verbose=0)
-    y_score = model.predict_proba(X_test)
+    y_score = model.predict(X_test)
 
     # Calculate confusion matrix
     y_predict = np.argmax(y_score, axis=1)
@@ -171,5 +171,7 @@ def train_model(nb_classes=20,
             f.write(str(scores))
             f.write('\n\n Scores when pooling song slices:\n')
             f.write(str(pooling_scores))
+
+    model.save('./trained_models.keras')
 
     return (scores_dict, pooled_scores_dict)
