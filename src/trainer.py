@@ -14,12 +14,13 @@ def train_model(nb_classes=20,
                 slice_length=911,
                 artist_folder='src/artists',
                 song_folder='src/song_data',
-                plots=True,
+                plots=False,
                 train=True,
-                load_checkpoint=False,
+                load_checkpoint=True,
                 save_metrics=True,
-                save_metrics_folder='metrics',
-                save_weights_folder='weights',
+                save_metrics_folder='metrics_song_split',
+                save_weights_folder='weights_song_split',
+                save_models_foler = 'trained_models',
                 batch_size=16,
                 nb_epochs=1, # change later
                 early_stop=10,
@@ -30,7 +31,7 @@ def train_model(nb_classes=20,
     Main function for training the model and testing
     """
 
-    weights = os.path.join(save_weights_folder, str(nb_classes) +
+    weights = os.path.join(os.getcwd(), save_weights_folder, str(nb_classes) +
                            '_' + str(slice_length) + '_' + str(random_states)
                             + '.keras'
                             )
@@ -39,42 +40,37 @@ def train_model(nb_classes=20,
 
     print("Loading dataset...")
 
-    if not album_split:
+    # if not album_split:
         # song split
-        Y_train, X_train, S_train, Y_test, X_test, S_test, \
-        Y_val, X_val, S_val = \
-            utility.load_dataset_song_split(song_folder_name=song_folder,
-                                            artist_folder=artist_folder,
-                                            nb_classes=nb_classes,
-                                            random_state=random_states)
-    else:
-        Y_train, X_train, S_train, Y_test, X_test, S_test, \
-        Y_val, X_val, S_val = \
-            utility.load_dataset_album_split(song_folder_name=song_folder,
-                                             artist_folder=artist_folder,
-                                             nb_classes=nb_classes,
-                                             random_state=random_states)
+    Y_train, X_train, S_train, Y_test, X_test, S_test = \
+        utility.load_dataset_song_split(song_folder_name=song_folder,
+                                        artist_folder=artist_folder,
+                                        nb_classes=nb_classes,
+                                        random_state=random_states)
+    # else:
+    #     Y_train, X_train, S_train, Y_test, X_test, S_test, \
+    #     Y_val, X_val, S_val = \
+    #         utility.load_dataset_album_split(song_folder_name=song_folder,
+    #                                          artist_folder=artist_folder,
+    #                                          nb_classes=nb_classes,
+    #                                          random_state=random_states)
 
     print("Loaded and split dataset. Slicing songs...")
 
     # Create slices out of the songs
     X_train, Y_train, S_train = utility.slice_songs(X_train, Y_train, S_train,
                                                     length=slice_length)
-    X_val, Y_val, S_val = utility.slice_songs(X_val, Y_val, S_val,
-                                              length=slice_length)
     X_test, Y_test, S_test = utility.slice_songs(X_test, Y_test, S_test,
                                                  length=slice_length)
 
     print("Training set label counts:", np.unique(Y_train, return_counts=True))
 
     # Encode the target vectors into one-hot encoded vectors
-    Y_train, le, enc = utility.encode_labels(Y_train)
-    Y_test, le, enc = utility.encode_labels(Y_test, le, enc)
-    Y_val, le, enc = utility.encode_labels(Y_val, le, enc)
+    Y_train, le_train = utility.encode_labels(Y_train)
+    Y_test, le_test = utility.encode_labels(Y_test)
 
     # Reshape data as 2d convolutional tensor shape
     X_train = X_train.reshape(X_train.shape + (1,))
-    X_val = X_val.reshape(X_val.shape + (1,))
     X_test = X_test.reshape(X_test.shape + (1,))
 
     # build the model
@@ -106,72 +102,82 @@ def train_model(nb_classes=20,
         print("Input Data Shape", X_train.shape)
         history = model.fit(X_train, Y_train, batch_size=batch_size,
                             shuffle=True, epochs=nb_epochs,
-                            verbose=1, validation_data=(X_val, Y_val),
+                            verbose=1, validation_split=0.2,
                             callbacks=[checkpointer, earlystopper])
         if plots:
             utility.plot_history(history)
 
     # Load weights that gave best performance on validation set
     model.load_weights(weights)
-    filename = os.path.join(save_metrics_folder, str(nb_classes) + '_'
-                            + str(slice_length)
-                            + '_' + str(random_states) + '.txt')
+    # filename = os.path.join(save_metrics_folder, str(nb_classes) + '_'
+    #                         + str(slice_length)
+    #                         + '_' + str(random_states) + '.txt')
+
+    # save model
+    model.save(os.path.join(os.getcwd(), save_models_foler, str(nb_classes) +
+                           '_' + str(slice_length) + '_' + str(random_states)
+                            + '.keras'))
 
     # Score test model
-    score = model.evaluate(X_test, Y_test, verbose=0)
+    score = model.evaluate(X_test, Y_test, verbose=1)
     y_score = model.predict(X_test)
 
-    # Calculate confusion matrix
-    y_predict = np.argmax(y_score, axis=1)
-    y_true = np.argmax(Y_test, axis=1)
-    cm = confusion_matrix(y_true, y_predict)
+    return score, y_score
 
-    # Plot the confusion matrix
-    class_names = np.arange(nb_classes)
-    class_names_original = le.inverse_transform(class_names)
-    plt.figure(figsize=(14, 14))
-    utility.plot_confusion_matrix(cm, classes=class_names_original,
-                                  normalize=True,
-                                  title='Confusion matrix with normalization')
-    if save_metrics:
-        plt.savefig(filename + '.png', bbox_inches="tight")
-    plt.close()
-    plt.figure(figsize=(14, 14))
+    ### From here down is analytics. 
 
-    # Print out metrics
-    print('Test score/loss:', score[0])
-    print('Test accuracy:', score[1])
-    print('\nTest results on each slice:')
-    scores = classification_report(y_true, y_predict,
-                                   target_names=class_names_original)
-    scores_dict = classification_report(y_true, y_predict,
-                                        target_names=class_names_original,
-                                        output_dict=True)
-    print(scores)
+    # # Calculate confusion matrix
+    # y_predict = np.argmax(y_score, axis=1)
+    # y_true = np.argmax(Y_test, axis=1)
+    # cm = confusion_matrix(y_true, y_predict)
 
-    # Predict artist using pooling methodology
-    pooling_scores, pooled_scores_dict = \
-        utility.predict_artist(model, X_test, Y_test, S_test,
-                               le, class_names=class_names_original,
-                               slices=None, verbose=False)
+    # # Plot the confusion matrix
+    # class_names = np.arange(nb_classes)
+    # print('Class Names:', class_names)
+    # print(le_test.get_params())
+    # class_names_original = le_test.inverse_transform(class_names)
+    # plt.figure(figsize=(14, 14))
+    # utility.plot_confusion_matrix(cm, classes=class_names_original,
+    #                               normalize=True,
+    #                               title='Confusion matrix with normalization')
+    # if save_metrics:
+    #     plt.savefig(filename + '.png', bbox_inches="tight")
+    # plt.close()
+    # plt.figure(figsize=(14, 14))
 
-    # Save metrics
-    if save_metrics:
-        plt.savefig(filename + '_pooled.png', bbox_inches="tight")
-        plt.close()
-        with open(filename, 'w') as f:
-            f.write("Training data shape:" + str(X_train.shape))
-            f.write('\nnb_classes: ' + str(nb_classes) +
-                    '\nslice_length: ' + str(slice_length))
-            f.write('\nweights: ' + weights)
-            f.write('\nlr: ' + str(lr))
-            f.write('\nTest score/loss: ' + str(score[0]))
-            f.write('\nTest accuracy: ' + str(score[1]))
-            f.write('\nTest results on each slice:\n')
-            f.write(str(scores))
-            f.write('\n\n Scores when pooling song slices:\n')
-            f.write(str(pooling_scores))
+    # # Print out metrics
+    # print('Test score/loss:', score[0])
+    # print('Test accuracy:', score[1])
+    # print('\nTest results on each slice:')
+    # scores = classification_report(y_true, y_predict,
+    #                                target_names=class_names_original)
+    # scores_dict = classification_report(y_true, y_predict,
+    #                                     target_names=class_names_original,
+    #                                     output_dict=True)
 
-    model.save('./trained_models.keras')
+    # # Predict artist using pooling methodology
+    # pooling_scores, pooled_scores_dict = \
+    #     utility.predict_artist(model, X_test, Y_test, S_test,
+    #                            le_test, class_names=class_names_original,
+    #                            slices=None, verbose=False)
 
-    return (scores_dict, pooled_scores_dict)
+    # # Save metrics
+    # if save_metrics:
+    #     plt.savefig(filename + '_pooled.png', bbox_inches="tight")
+    #     plt.close()
+    #     with open(filename, 'w') as f:
+    #         f.write("Training data shape:" + str(X_train.shape))
+    #         f.write('\nnb_classes: ' + str(nb_classes) +
+    #                 '\nslice_length: ' + str(slice_length))
+    #         f.write('\nweights: ' + weights)
+    #         f.write('\nlr: ' + str(lr))
+    #         f.write('\nTest score/loss: ' + str(score[0]))
+    #         f.write('\nTest accuracy: ' + str(score[1]))
+    #         f.write('\nTest results on each slice:\n')
+    #         f.write(str(scores))
+    #         f.write('\n\n Scores when pooling song slices:\n')
+    #         f.write(str(pooling_scores))
+
+    # model.save('./trained_models.keras')
+
+    # return (scores_dict, pooled_scores_dict)

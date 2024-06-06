@@ -3,6 +3,7 @@ import dill
 import random
 import itertools
 import logging
+import pickle
 
 import numpy as np
 from numpy.random import RandomState
@@ -11,6 +12,8 @@ import matplotlib.pyplot as plt
 import librosa
 import librosa.display
 from pydub import AudioSegment
+
+import tensorflow.keras as keras
 
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
@@ -100,7 +103,6 @@ def create_dataset(artist_folder='./artists', save_folder='song_data',
                     print(f"Error processing {song_path}: {e}")
 
 
-
 def load_dataset(song_folder_name='song_data',
                  artist_folder='artists',
                  nb_classes=20, random_state=42):
@@ -110,11 +112,11 @@ def load_dataset(song_folder_name='song_data',
 
     # Get all songs saved as numpy arrays in the given folder
     song_list_path = os.path.join(os.getcwd(), song_folder_name)
-    print(song_list_path)
     song_list = os.listdir(song_list_path)
 
     # Load the list of artists
     artist_list_path = os.path.join(os.getcwd(), artist_folder)
+    print(artist_list_path)
     artist_list = os.listdir(artist_list_path)
 
     # select the appropriate number of classes
@@ -137,85 +139,83 @@ def load_dataset(song_folder_name='song_data',
 
     return artist, spectrogram, song_name
 
+### Won't need this for our purposes
+# def load_dataset_album_split(song_folder_name='song_data', 
+#                              artist_folder='./artists',
+#                              nb_classes=20, random_state=42):
+#     """ This function loads a dataset and splits it on an album level"""
+#     song_list = os.listdir(song_folder_name)
 
-def load_dataset_album_split(song_folder_name='song_data',
-                             artist_folder='./artists',
-                             nb_classes=20, random_state=42):
-    """ This function loads a dataset and splits it on an album level"""
-    song_list = os.listdir(song_folder_name)
+#     # Load the list of artists
+#     artist_list = os.listdir(artist_folder)
 
-    # Load the list of artists
-    artist_list = os.listdir(artist_folder)
+#     train_albums = []
+#     test_albums = []
+#     val_albums = []
+#     random.seed(random_state)
+#     for artist in os.listdir(artist_folder):
+#         albums = os.listdir(os.path.join(artist_folder, artist))
+#         random.shuffle(albums)
+#         test_albums.append(artist + '_%%-%%_' + albums.pop(0))
+#         val_albums.append(artist + '_%%-%%_' + albums.pop(0))
+#         train_albums.extend([artist + '_%%-%%_' + album for album in albums])
 
-    train_albums = []
-    test_albums = []
-    val_albums = []
-    random.seed(random_state)
-    for artist in os.listdir(artist_folder):
-        albums = os.listdir(os.path.join(artist_folder, artist))
-        random.shuffle(albums)
-        test_albums.append(artist + '_%%-%%_' + albums.pop(0))
-        val_albums.append(artist + '_%%-%%_' + albums.pop(0))
-        train_albums.extend([artist + '_%%-%%_' + album for album in albums])
+#     # select the appropriate number of classes
+#     prng = RandomState(random_state)
+#     artists = prng.choice(artist_list, size=nb_classes, replace=False)
 
-    # select the appropriate number of classes
-    prng = RandomState(random_state)
-    artists = prng.choice(artist_list, size=nb_classes, replace=False)
+#     # Create empty lists
+#     Y_train, Y_test, Y_val = [], [], []
+#     X_train, X_test, X_val = [], [], []
+#     S_train, S_test, S_val = [], [], []
 
-    # Create empty lists
-    Y_train, Y_test, Y_val = [], [], []
-    X_train, X_test, X_val = [], [], []
-    S_train, S_test, S_val = [], [], []
+#     # Load each song into memory if the artist is included and return
+#     for song in song_list:
+#         with open(os.path.join(song_folder_name, song), 'rb') as fp:
+#             loaded_song = dill.load(fp)
+#         artist, album, song_name = song.split('_%%-%%_')
+#         artist_album = artist + '_%%-%%_' + album
 
-    # Load each song into memory if the artist is included and return
-    for song in song_list:
-        with open(os.path.join(song_folder_name, song), 'rb') as fp:
-            loaded_song = dill.load(fp)
-        artist, album, song_name = song.split('_%%-%%_')
-        artist_album = artist + '_%%-%%_' + album
+#         if loaded_song[0] in artists:
+#             if artist_album in train_albums:
+#                 Y_train.append(loaded_song[0])
+#                 X_train.append(loaded_song[1])
+#                 S_train.append(loaded_song[2])
+#             elif artist_album in test_albums:
+#                 Y_test.append(loaded_song[0])
+#                 X_test.append(loaded_song[1])
+#                 S_test.append(loaded_song[2])
+#             elif artist_album in val_albums:
+#                 Y_val.append(loaded_song[0])
+#                 X_val.append(loaded_song[1])
+#                 S_val.append(loaded_song[2])
 
-        if loaded_song[0] in artists:
-            if artist_album in train_albums:
-                Y_train.append(loaded_song[0])
-                X_train.append(loaded_song[1])
-                S_train.append(loaded_song[2])
-            elif artist_album in test_albums:
-                Y_test.append(loaded_song[0])
-                X_test.append(loaded_song[1])
-                S_test.append(loaded_song[2])
-            elif artist_album in val_albums:
-                Y_val.append(loaded_song[0])
-                X_val.append(loaded_song[1])
-                S_val.append(loaded_song[2])
-
-    return Y_train, X_train, S_train, \
-           Y_test, X_test, S_test, \
-           Y_val, X_val, S_val
+#     return Y_train, X_train, S_train, \
+#            Y_test, X_test, S_test, \
+#            Y_val, X_val, S_val
 
 
 def load_dataset_song_split(song_folder_name='song_data',
-                            artist_folder='./artists',
+                            artist_folder='artists',
                             nb_classes=20,
                             test_split_size=0.1,
-                            validation_split_size=0.1,
                             random_state=42):
-    Y, X, S = load_dataset(song_folder_name=song_folder_name,
+    Y, X, song_name = load_dataset(song_folder_name=song_folder_name,
                            artist_folder=artist_folder,
                            nb_classes=nb_classes,
                            random_state=random_state)
     # train and test split
     X_train, X_test, Y_train, Y_test, S_train, S_test = train_test_split(
-        X, Y, S, test_size=test_split_size, stratify=Y,
+        X, Y, song_name, test_size=test_split_size, stratify=Y,
         random_state=random_state)
 
     # Create a validation to be used to track progress
-    X_train, X_val, Y_train, Y_val, S_train, S_val = train_test_split(
-        X_train, Y_train, S_train, test_size=validation_split_size,
-        shuffle=True, stratify=Y_train, random_state=random_state)
+    # X_train, X_val, Y_train, Y_val, S_train, S_val = train_test_split(
+    #     X_train, Y_train, S_train, test_size=validation_split_size,
+    #     shuffle=True, stratify=Y_train, random_state=random_state)
 
     return Y_train, X_train, S_train, \
-           Y_test, X_test, S_test, \
-           Y_val, X_val, S_val
+           Y_test, X_test, S_test
 
 
 def slice_songs(X, Y, S, length=911):
@@ -407,69 +407,94 @@ def predict_artist(model, X, Y, S,
     return (class_report, class_report_dict)
 
 
-def encode_labels(Y, le=None, enc=None):
+def encode_labels(Y,label_encoder=None):
     """Encodes target variables into numbers and then one hot encodings"""
 
     # initialize encoders
-    N = Y.shape[0]
+    # N = Y.shape[0]
 
     # Encode the labels
-    if le is None:
-        le = preprocessing.LabelEncoder()
-        Y_le = le.fit_transform(Y).reshape(N, 1)
+    if label_encoder is None:
+        label_encoder = preprocessing.LabelEncoder()
+        Y_integer_encoded = label_encoder.fit_transform(Y)
+        with open('label_encoder.pkl', 'wb') as f:
+            pickle.dump(label_encoder, f) # save encoder for decoding in the future
     else:
-        Y_le = le.transform(Y).reshape(N, 1)
+        Y_integer_encoded = label_encoder.transform(Y)
+        print(Y_integer_encoded)
 
     # convert into one hot encoding
-    if enc is None:
-        enc = preprocessing.OneHotEncoder()
-        Y_enc = enc.fit_transform(Y_le).toarray()
-    else:
-        Y_enc = enc.transform(Y_le).toarray()
+    Y_enc = keras.utils.to_categorical(Y_integer_encoded)
+    print(label_encoder.classes_)
 
     # return encoders to re-use on other data
-    return Y_enc, le, enc
-
-
-def simple_encoding(Y, le=None):
-    """Encodes target variables into numbers"""
-
-    # initialize encoders
-    N = Y.shape[0]
-
-    # Encode the labels
-    if le is None:
-        le = preprocessing.LabelEncoder()
-        Y_le = le.fit_transform(Y)
-    else:
-        Y_le = le.transform(Y)
-
-    # return encoders to re-use on other data
-    return Y_le, le
+    return Y_enc, label_encoder
 
 
 if __name__ == '__main__':
 
     # configuration options
-    create_data = True
-    create_visuals = True
-    save_visuals = False
+    # create_data = True
+    # create_visuals = True
+    # save_visuals = False
 
-    if create_data:
-        create_dataset(artist_folder='artists', save_folder='song_data',
-                       sr=16000, n_mels=128, n_fft=2048,
-                       hop_length=512)
+    # if create_data:
+    #     create_dataset(artist_folder='artists', save_folder='song_data',
+    #                    sr=16000, n_mels=128, n_fft=2048,
+    #                    hop_length=512)
 
-    if create_visuals:
-        # Create spectrogram for a specific song
-        visualize_spectrogram(
-            'artists/metro_boomin/heroes_&_villians/' +
-            '0.wav',
-            offset=60, duration=29.12)
+    # if create_visuals:
+    #     # Create spectrogram for a specific song
+    #     visualize_spectrogram(
+    #         'artists/metro_boomin/heroes_&_villians/' +
+    #         '0.wav',
+    #         offset=60, duration=29.12)
 
-        # Create spectrogram subplots
-        create_spectrogram_plots(artist_folder='artists', sr=16000, n_mels=128,
-                                 n_fft=2048, hop_length=512)
-        if save_visuals:
-            plt.savefig(os.path.join('spectrograms.png'),
-                        bbox_inches="tight")
+    #     # Create spectrogram subplots
+    #     create_spectrogram_plots(artist_folder='artists', sr=16000, n_mels=128,
+    #                              n_fft=2048, hop_length=512)
+    #     if save_visuals:
+    #         plt.savefig(os.path.join('spectrograms.png'),
+    #                     bbox_inches="tight")
+
+
+    artist_folder='artists'
+    song_folder='song_data'
+    nb_classes=20
+    slice_length=911
+
+    Y_train, X_train, S_train, Y_test, X_test, S_test = \
+        load_dataset_song_split(song_folder_name=song_folder,
+                                        artist_folder=artist_folder,
+                                        nb_classes=nb_classes,
+                                        random_state=42)
+
+    print("Loaded and split dataset. Slicing songs...")
+
+    # Create slices out of the songs
+    X_train, Y_train, S_train = slice_songs(X_train, Y_train, S_train,
+                                                    length=slice_length)
+    X_test, Y_test, S_test = slice_songs(X_test, Y_test, S_test,
+                                                 length=slice_length)
+
+    # print("Training set label counts:", np.unique(Y_train, return_counts=True))
+
+    # Encode the target vectors into one-hot encoded vectors
+    Y_train = encode_labels(Y_train)
+    Y_test = encode_labels(Y_test)
+
+    X_train = X_train.reshape(X_train.shape + (1,))
+    X_test = X_test.reshape(X_test.shape + (1,))
+
+    # print('Testing:')
+    # print(type(X_test))
+    # print(X_test.shape)
+    # print(Y_test)
+    # print(type(Y_test))
+    # print(Y_test.shape)
+
+    # print('Training:')
+    # print(type(X_train))
+    # print(X_train.shape)
+    # print(type(Y_train))
+    # print(Y_train.shape)

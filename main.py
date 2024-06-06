@@ -22,37 +22,42 @@ if __name__ == '__main__':
     29.12s 911 frames
     '''
 
-    slice_lengths = [911, 628, 313, 157, 94, 32]
-    random_state_list = [0, 21, 42]
-    iterations = 3
-    summary_metrics_output_folder = 'trials_song_split'
-    for slice_len in slice_lengths:
+    # slice_lengths = [911, 628, 313, 157, 94, 32]
+    # random_state_list = [0, 21, 42]
+    # iterations = 3
+    # summary_metrics_output_folder = 'trials_song_split'
+    # for slice_len in slice_lengths:
 
-        scores = []
-        pooling_scores = []
-        for i in range(iterations):
-            score, pooling_score = trainer.train_model(
-                nb_classes=20,
-                slice_length=slice_len,
-                lr=0.001,
-                train=True,
-                load_checkpoint=True,
-                plots=False,
-                album_split=False,
-                random_states=random_state_list[i],
-                save_metrics=True,
-                save_metrics_folder='metrics_song_split',
-                save_weights_folder='weights_song_split')
+    #     scores = []
+    #     pooling_scores = []
+    #     for i in range(iterations):
+    #         score, pooling_score = trainer.train_model(
+    #             nb_classes=20,
+    #             slice_length=slice_len,
+    #             lr=0.001,
+    #             train=True,
+    #             load_checkpoint=True,
+    #             plots=False,
+    #             album_split=False,
+    #             random_states=random_state_list[i],
+    #             save_metrics=True,
+    #             save_metrics_folder='metrics_song_split',
+    #             save_weights_folder='weights_song_split')
 
-            scores.append(score['weighted avg'])
-            pooling_scores.append(pooling_score['weighted avg'])
-            gc.collect()
+    #         scores.append(score['weighted avg'])
+    #         pooling_scores.append(pooling_score['weighted avg'])
+    #         gc.collect()
 
-        os.makedirs(summary_metrics_output_folder, exist_ok=True)
+    #     os.makedirs(summary_metrics_output_folder, exist_ok=True)
 
-        pd.DataFrame(scores).to_csv(
-            '{}/{}_score.csv'.format(summary_metrics_output_folder, slice_len))
+    #     pd.DataFrame(scores).to_csv(
+    #         '{}/{}_score.csv'.format(summary_metrics_output_folder, slice_len))
 
-        pd.DataFrame(pooling_scores).to_csv(
-            '{}/{}_pooled_score.csv'.format(
-                summary_metrics_output_folder, slice_len))
+    #     pd.DataFrame(pooling_scores).to_csv(
+    #         '{}/{}_pooled_score.csv'.format(
+    #             summary_metrics_output_folder, slice_len))
+
+    score, y_score = trainer.train_model()
+
+    print("Test loss:", score[0])
+    print("Test accuracy:", score[1])
