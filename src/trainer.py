@@ -67,7 +67,7 @@ def train_model(nb_classes=20,
 
     # Encode the target vectors into one-hot encoded vectors
     Y_train, le_train = utility.encode_labels(Y_train)
-    Y_test, le_test = utility.encode_labels(Y_test)
+    Y_test, _ = utility.encode_labels(Y_test, le_train)
 
     # Reshape data as 2d convolutional tensor shape
     X_train = X_train.reshape(X_train.shape + (1,))
